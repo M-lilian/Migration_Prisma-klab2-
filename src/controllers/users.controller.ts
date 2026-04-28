@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import prisma from '../config/prisma';
+import { createUserSchema, updateUserSchema } from '../validators/users.validator';
 
 export const getAllUsers = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -14,25 +15,40 @@ export const getUserById = async (req: Request, res: Response, next: NextFunctio
   try {
     const user = await prisma.user.findUnique({
       where: { id: parseInt(req.params.id as string) },
-      include: { listings: true, bookings: true }
+      include: {
+        listings: { include: { _count: { select: { bookings: true } } } },
+        bookings: { include: { listing: { select: { title: true, location: true } } } }
+      }
     });
-    if (!user) return res.status(404).json({ error: 'User not found' });
-    res.json(user);
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    const { listings, bookings, ...userData } = user;
+    const response = {
+      ...userData,
+      ...(user.role === "HOST" ? { listings } : { bookings })
+    };
+    res.json(response);
   } catch (error) { next(error); }
 };
 
 export const createUser = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const user = await prisma.user.create({ data: req.body });
+    const result = createUserSchema.safeParse(req.body);
+    if (!result.success) return res.status(400).json({ errors: result.error.issues });
+
+    const user = await prisma.user.create({ data: result.data });
     res.status(201).json(user);
   } catch (error) { next(error); }
 };
 
 export const updateUser = async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const result = updateUserSchema.safeParse(req.body);
+    if (!result.success) return res.status(400).json({ errors: result.error.issues });
+
     const user = await prisma.user.update({
       where: { id: parseInt(req.params.id as string) },
-      data: req.body
+      data: result.data
     });
     res.json(user);
   } catch (error) { next(error); }
