@@ -7,6 +7,7 @@ datasource db {
 }
 
 enum Role {
+  ADMIN
   HOST
   GUEST
 }
@@ -25,18 +26,22 @@ enum BookingStatus {
 }
 
 model User {
-  id        Int       @id @default(autoincrement())
-  name      String
-  email     String    @unique
-  username  String    @unique
-  phone     String
-  role      Role      @default(GUEST)
-  avatar    String?
-  createdAt DateTime  @default(now())
+  id               Int       @id @default(autoincrement())
+  name             String
+  email            String    @unique
+  username         String    @unique
+  phone            String
+  password         String    // Secured by bcrypt
+  role             Role      @default(GUEST)
+  avatar           String?
+  resetToken       String?   // For password recovery
+  resetTokenExpiry DateTime? 
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt 
   
-  profile   Profile?
-  listings  Listing[]
-  bookings  Booking[]
+  profile          Profile?
+  listings         Listing[]
+  bookings         Booking[]
 }
 
 model Profile {

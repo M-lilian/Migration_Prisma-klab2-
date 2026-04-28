@@ -7,10 +7,11 @@ import { PrismaClient, Prisma } from '@prisma/client';
 import userRoutes from './routes/users.routes';
 import listingRoutes from './routes/listings.routes';
 import bookingRoutes from './routes/bookings.routes';
+import authRoutes from './routes/auth.routes';
 
 const app = express();
 app.use(express.json());
-
+app.use('/auth', authRoutes);
 app.use('/users', userRoutes);
 app.use('/listings', listingRoutes);
 app.use('/bookings', bookingRoutes);

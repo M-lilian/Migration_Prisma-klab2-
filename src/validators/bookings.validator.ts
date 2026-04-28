@@ -1,7 +1,7 @@
 import { z } from "zod";
 export const createBookingSchema = z.object({
   listingId: z.number().int().positive(),
-  guestId: z.number().int().positive(),
+  // guestId: z.number().int().positive(),
   checkIn: z.string().datetime("Invalid checkIn date"),
   checkOut: z.string().datetime("Invalid checkOut date"),
 }).refine(

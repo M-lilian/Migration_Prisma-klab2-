@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import prisma from '../config/prisma';
 import { createListingSchema, updateListingSchema } from '../validators/listings.validator';
+import { AuthRequest } from '../middlewares/auth.middleware'; // Import our custom request type!
 
 export const getAllListings = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -38,32 +39,60 @@ export const getListingById = async (req: Request, res: Response, next: NextFunc
   } catch (error) { next(error); }
 };
 
-export const createListing = async (req: Request, res: Response, next: NextFunction) => {
+export const createListing = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const result = createListingSchema.safeParse(req.body);
     if (!result.success) return res.status(400).json({ errors: result.error.issues });
 
-    const listing = await prisma.listing.create({ data: result.data });
+    // Force the hostId to be the logged-in user's ID. No faking allowed!
+    const listing = await prisma.listing.create({ 
+      data: { 
+        ...result.data, 
+        hostId: req.userId as number 
+      } 
+    });
     res.status(201).json(listing);
   } catch (error) { next(error); }
 };
 
-export const updateListing = async (req: Request, res: Response, next: NextFunction) => {
+export const updateListing = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
+    const listingId = parseInt(req.params.id as string);
+
+    // 1. Fetch the listing to check who owns it
+    const listing = await prisma.listing.findUnique({ where: { id: listingId } });
+    if (!listing) return res.status(404).json({ error: 'Listing not found' });
+
+    // 2. Ownership Check: Are you the owner? Or are you an ADMIN?
+    if (listing.hostId !== req.userId && req.role !== "ADMIN") {
+      return res.status(403).json({ error: "You can only edit your own listings" });
+    }
+
     const result = updateListingSchema.safeParse(req.body);
     if (!result.success) return res.status(400).json({ errors: result.error.issues });
 
-    const listing = await prisma.listing.update({
-      where: { id: parseInt(req.params.id as string) },
+    const updatedListing = await prisma.listing.update({
+      where: { id: listingId },
       data: result.data
     });
-    res.json(listing);
+    res.json(updatedListing);
   } catch (error) { next(error); }
 };
 
-export const deleteListing = async (req: Request, res: Response, next: NextFunction) => {
+export const deleteListing = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    await prisma.listing.delete({ where: { id: parseInt(req.params.id as string) } });
+    const listingId = parseInt(req.params.id as string);
+
+    // 1. Fetch the listing
+    const listing = await prisma.listing.findUnique({ where: { id: listingId } });
+    if (!listing) return res.status(404).json({ error: 'Listing not found' });
+
+    // 2. Ownership Check
+    if (listing.hostId !== req.userId && req.role !== "ADMIN") {
+      return res.status(403).json({ error: "You can only delete your own listings" });
+    }
+
+    await prisma.listing.delete({ where: { id: listingId } });
     res.status(204).send();
   } catch (error) { next(error); }
 };

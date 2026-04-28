@@ -7,6 +7,6 @@ export const createListingSchema = z.object({
   guests: z.number().int().min(1, "Must allow at least 1 guest"),
   type: z.enum(["APARTMENT", "HOUSE", "VILLA", "CABIN"]),
   amenities: z.array(z.string()).min(1, "At least one amenity is required"),
-  hostId: z.number().int().positive()
+  // hostId: z.number().int().positive()
 });
 export const updateListingSchema = createListingSchema.partial();
