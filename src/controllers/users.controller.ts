@@ -31,15 +31,15 @@ export const getUserById = async (req: Request, res: Response, next: NextFunctio
   } catch (error) { next(error); }
 };
 
-export const createUser = async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const result = createUserSchema.safeParse(req.body);
-    if (!result.success) return res.status(400).json({ errors: result.error.issues });
+// export const createUser = async (req: Request, res: Response, next: NextFunction) => {
+//   try {
+//     const result = createUserSchema.safeParse(req.body);
+//     if (!result.success) return res.status(400).json({ errors: result.error.issues });
 
-    const user = await prisma.user.create({ data: result.data });
-    res.status(201).json(user);
-  } catch (error) { next(error); }
-};
+//     const user = await prisma.user.create({ data: result.data });
+//     res.status(201).json(user);
+//   } catch (error) { next(error); }
+// };
 
 export const updateUser = async (req: Request, res: Response, next: NextFunction) => {
   try {

@@ -41,6 +41,7 @@ export const register = async (req: Request, res: Response, next: NextFunction) 
 };
 
 // 2. LOGIN
+// 2. LOGIN
 export const login = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { email, password } = req.body;
@@ -52,16 +53,18 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
     const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) return res.status(401).json({ error: "Invalid credentials" });
 
+    // THE FIX IS RIGHT HERE: Hardcoding "7d" stops TypeScript from throwing the overload error
     const token = jwt.sign(
       { userId: user.id, role: user.role }, 
       process.env.JWT_SECRET as string, 
-      { expiresIn: process.env.JWT_EXPIRES_IN }
+      { expiresIn: "7d" }
     );
 
     const { password: _, ...userWithoutPassword } = user;
     res.json({ token, user: userWithoutPassword });
+
   } catch (error) { next(error); }
-};
+};;
 
 // 3. GET ME (User Profile)
 export const getMe = async (req: AuthRequest, res: Response, next: NextFunction) => {
@@ -136,6 +139,7 @@ export const forgotPassword = async (req: Request, res: Response, next: NextFunc
 };
 
 // 6. RESET PASSWORD
+// 6. RESET PASSWORD
 export const resetPassword = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const rawToken = req.params.token as string;
@@ -156,4 +160,19 @@ export const resetPassword = async (req: Request, res: Response, next: NextFunct
 
     if (!user) return res.status(400).json({ error: "Invalid or expired reset token" });
 
-    const hashedPassword = await bcrypt.hash(newPassword,
+    // The line that started all the drama!
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    // Update the database and clear the reset token
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        password: hashedPassword,
+        resetToken: null,
+        resetTokenExpiry: null
+      }
+    });
+
+    res.json({ message: "Password has been successfully reset" });
+  } catch (error) { next(error); } // <-- Here is the missing catch block and brackets!
+};

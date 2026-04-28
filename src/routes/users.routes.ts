@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getAllUsers, getUserById, createUser, updateUser, deleteUser } from '../controllers/users.controller';
+import { getAllUsers, getUserById , updateUser, deleteUser } from '../controllers/users.controller';
 import { getProfile, createProfile, updateProfile } from '../controllers/profiles.controller'; // Import the new controller!
 
 const router = Router();
@@ -7,7 +7,7 @@ const router = Router();
 // Standard User CRUD
 router.get('/', getAllUsers);
 router.get('/:id', getUserById);
-router.post('/', createUser);
+// router.post('/', createUser);
 router.put('/:id', updateUser);
 router.delete('/:id', deleteUser);
 
