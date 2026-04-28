@@ -1,6 +1,5 @@
 generator client {
-  provider        = "prisma-client-js"
-  previewFeatures = ["driverAdapters"]
+  provider = "prisma-client-js"
 }
 
 datasource db {
@@ -33,15 +32,25 @@ model User {
   phone     String
   role      Role      @default(GUEST)
   avatar    String?
-  bio       String?
   createdAt DateTime  @default(now())
   
+  profile   Profile?
   listings  Listing[]
   bookings  Booking[]
 }
 
+model Profile {
+  id      Int     @id @default(autoincrement())
+  bio     String?
+  website String?
+  country String?
+  
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId  Int     @unique
+}
+
 model Listing {
-  id            Int         @id @default(autoincrement())
+  id            Int            @id @default(autoincrement())
   title         String
   description   String
   location      String
@@ -50,16 +59,24 @@ model Listing {
   type          ListingType
   amenities     String[]
   rating        Float?
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
   
   hostId        Int
-  host          User        @relation(fields: [hostId], references: [id], onDelete: Cascade)
+  host          User           @relation(fields: [hostId], references: [id], onDelete: Cascade)
   
   bookings      Booking[]
+  photos        ListingPhoto[]
 
   @@index([location])
   @@index([pricePerNight])
+}
+
+model ListingPhoto {
+  id        Int     @id @default(autoincrement())
+  url       String
+  listing   Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  listingId Int
 }
 
 model Booking {
