@@ -4,6 +4,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL") 
 }
 
 enum Role {
@@ -33,7 +34,6 @@ model User {
   phone            String
   password         String    // Secured by bcrypt
   role             Role      @default(GUEST)
-  avatar           String?
   resetToken       String?   // For password recovery
   resetTokenExpiry DateTime? 
   createdAt        DateTime  @default(now())
@@ -42,6 +42,8 @@ model User {
   profile          Profile?
   listings         Listing[]
   bookings         Booking[]
+  avatar           String?
+  avatarPublicId   String?
 }
 
 model Profile {
@@ -77,13 +79,6 @@ model Listing {
   @@index([pricePerNight])
 }
 
-model ListingPhoto {
-  id        Int     @id @default(autoincrement())
-  url       String
-  listing   Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
-  listingId Int
-}
-
 model Booking {
   id         Int           @id @default(autoincrement())
   checkIn    DateTime
@@ -97,4 +92,12 @@ model Booking {
   
   listingId  Int
   listing    Listing       @relation(fields: [listingId], references: [id], onDelete: Cascade)
+}
+
+model ListingPhoto {
+  id        Int      @id @default(autoincrement())
+  url       String
+  publicId  String
+  listingId Int
+  listing   Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
 }
