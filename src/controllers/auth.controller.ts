@@ -4,6 +4,8 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { AuthRequest } from '../middlewares/auth.middleware';
+import { sendEmail } from '../config/email';
+import { welcomeEmail, passwordResetEmail } from '../templates/emails';
 
 // 1. REGISTER
 export const register = async (req: Request, res: Response, next: NextFunction) => {
@@ -36,37 +38,40 @@ export const register = async (req: Request, res: Response, next: NextFunction) 
     });
 
     const { password: _, ...userWithoutPassword } = user;
+
+    // Send welcome email — never crash the server if it fails
     res.status(201).json(userWithoutPassword);
+    try {
+      await sendEmail(email, "Welcome to Airbnb!", welcomeEmail(name, assignedRole));
+    } catch (emailError) {
+      console.error("[EMAIL ERROR] Welcome email failed:", emailError);
+    }
   } catch (error) { next(error); }
 };
 
-// 2. LOGIN
 // 2. LOGIN
 export const login = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { email, password } = req.body;
 
     const user = await prisma.user.findUnique({ where: { email } });
-    
     if (!user) return res.status(401).json({ error: "Invalid credentials" });
 
     const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) return res.status(401).json({ error: "Invalid credentials" });
 
-    // THE FIX IS RIGHT HERE: Hardcoding "7d" stops TypeScript from throwing the overload error
     const token = jwt.sign(
-      { userId: user.id, role: user.role }, 
-      process.env.JWT_SECRET as string, 
+      { userId: user.id, role: user.role },
+      process.env.JWT_SECRET as string,
       { expiresIn: "7d" }
     );
 
     const { password: _, ...userWithoutPassword } = user;
     res.json({ token, user: userWithoutPassword });
-
   } catch (error) { next(error); }
-};;
+};
 
-// 3. GET ME (User Profile)
+// 3. GET ME
 export const getMe = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const user = await prisma.user.findUnique({
@@ -79,7 +84,6 @@ export const getMe = async (req: AuthRequest, res: Response, next: NextFunction)
 
     if (!user) return res.status(404).json({ error: "User not found" });
 
-    // Strip out all the security stuff before sending it back
     const { password, resetToken, resetTokenExpiry, ...safeUser } = user;
     res.json(safeUser);
   } catch (error) { next(error); }
@@ -116,13 +120,13 @@ export const forgotPassword = async (req: Request, res: Response, next: NextFunc
     if (!email) return res.status(400).json({ error: "Email is required" });
 
     const user = await prisma.user.findUnique({ where: { email } });
-    
+
     const successMessage = "If that email is registered, a reset link has been sent.";
     if (!user) return res.json({ message: successMessage });
 
     const rawToken = crypto.randomBytes(32).toString('hex');
     const hashedToken = crypto.createHash('sha256').update(rawToken).digest('hex');
-    
+
     await prisma.user.update({
       where: { id: user.id },
       data: {
@@ -131,14 +135,18 @@ export const forgotPassword = async (req: Request, res: Response, next: NextFunc
       }
     });
 
-    const resetLink = `http://localhost:3000/auth/reset-password/${rawToken}`;
-    console.log(`[EMAIL SIMULATOR] Send this link to ${email}: ${resetLink}`);
+    const resetLink = `${process.env.API_URL || "http://localhost:3000"}/auth/reset-password/${rawToken}`;
 
+    // Send reset email — always return 200 regardless
     res.json({ message: successMessage });
+    try {
+      await sendEmail(email, "Reset Your Airbnb Password", passwordResetEmail(user.name, resetLink));
+    } catch (emailError) {
+      console.error("[EMAIL ERROR] Password reset email failed:", emailError);
+    }
   } catch (error) { next(error); }
 };
 
-// 6. RESET PASSWORD
 // 6. RESET PASSWORD
 export const resetPassword = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -160,10 +168,8 @@ export const resetPassword = async (req: Request, res: Response, next: NextFunct
 
     if (!user) return res.status(400).json({ error: "Invalid or expired reset token" });
 
-    // The line that started all the drama!
     const hashedPassword = await bcrypt.hash(newPassword, 10);
 
-    // Update the database and clear the reset token
     await prisma.user.update({
       where: { id: user.id },
       data: {
@@ -174,5 +180,5 @@ export const resetPassword = async (req: Request, res: Response, next: NextFunct
     });
 
     res.json({ message: "Password has been successfully reset" });
-  } catch (error) { next(error); } // <-- Here is the missing catch block and brackets!
+  } catch (error) { next(error); }
 };

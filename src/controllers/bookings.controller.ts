@@ -2,6 +2,8 @@ import { Request, Response, NextFunction } from 'express';
 import prisma from '../config/prisma';
 import { createBookingSchema } from '../validators/bookings.validator';
 import { AuthRequest } from '../middlewares/auth.middleware';
+import { sendEmail } from '../config/email';
+import { bookingConfirmationEmail, bookingCancellationEmail } from '../templates/emails';
 
 export const getAllBookings = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -35,17 +37,14 @@ export const createBooking = async (req: AuthRequest, res: Response, next: NextF
     if (!result.success) return res.status(400).json({ errors: result.error.issues });
 
     const { listingId, checkIn, checkOut } = result.data;
-    const guestId = req.userId as number; // Identity pulled directly from the JWT!
+    const guestId = req.userId as number;
 
-    // 1. Does the listing even exist?
     const listing = await prisma.listing.findUnique({ where: { id: listingId } });
     if (!listing) return res.status(404).json({ error: "Listing not found" });
 
     const inDate = new Date(checkIn);
     const outDate = new Date(checkOut);
 
-    // 2. The Overlap Check (Research Task)
-    // If a confirmed booking's checkIn is before our checkOut AND its checkOut is after our checkIn = Conflict!
     const conflict = await prisma.booking.findFirst({
       where: {
         listingId,
@@ -59,11 +58,9 @@ export const createBooking = async (req: AuthRequest, res: Response, next: NextF
       return res.status(409).json({ error: "These dates are already booked." });
     }
 
-    // 3. Server-side math (Never trust the client's math)
     const days = Math.ceil((outDate.getTime() - inDate.getTime()) / (1000 * 60 * 60 * 24));
     const totalPrice = days * listing.pricePerNight;
 
-    // 4. Create the pending booking
     const booking = await prisma.booking.create({
       data: {
         listingId,
@@ -74,7 +71,28 @@ export const createBooking = async (req: AuthRequest, res: Response, next: NextF
         status: "PENDING"
       }
     });
+
+    // Send booking confirmation email
     res.status(201).json(booking);
+    try {
+      const guest = await prisma.user.findUnique({ where: { id: guestId } });
+      if (guest) {
+        await sendEmail(
+          guest.email,
+          "Your Booking is Confirmed!",
+          bookingConfirmationEmail(
+            guest.name,
+            listing.title,
+            listing.location,
+            inDate.toDateString(),
+            outDate.toDateString(),
+            totalPrice
+          )
+        );
+      }
+    } catch (emailError) {
+      console.error("[EMAIL ERROR] Booking confirmation email failed:", emailError);
+    }
   } catch (error) { next(error); }
 };
 
@@ -82,26 +100,43 @@ export const deleteBooking = async (req: AuthRequest, res: Response, next: NextF
   try {
     const bookingId = parseInt(req.params.id as string);
 
-    // 1. Find the booking
-    const booking = await prisma.booking.findUnique({ where: { id: bookingId } });
+    const booking = await prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: {
+        guest: true,
+        listing: true
+      }
+    });
     if (!booking) return res.status(404).json({ error: "Booking not found" });
 
-    // 2. Ownership check: Only the guest (or Bang PD) can cancel
     if (booking.guestId !== req.userId && req.role !== "ADMIN") {
       return res.status(403).json({ error: "Forbidden: You can only cancel your own bookings" });
     }
 
-    // 3. Make sure it isn't already cancelled
     if (booking.status === "CANCELLED") {
       return res.status(400).json({ error: "Booking is already cancelled" });
     }
 
-    // 4. Soft Delete: Update status to CANCELLED instead of erasing the row
     const updatedBooking = await prisma.booking.update({
       where: { id: bookingId },
       data: { status: "CANCELLED" }
     });
-    
+
+    // Send cancellation email
     res.json(updatedBooking);
+    try {
+      await sendEmail(
+        booking.guest.email,
+        "Your Booking Has Been Cancelled",
+        bookingCancellationEmail(
+          booking.guest.name,
+          booking.listing.title,
+          booking.checkIn.toDateString(),
+          booking.checkOut.toDateString()
+        )
+      );
+    } catch (emailError) {
+      console.error("[EMAIL ERROR] Cancellation email failed:", emailError);
+    }
   } catch (error) { next(error); }
 };
