@@ -8,7 +8,7 @@ const fileFilter = (req: any, file: Express.Multer.File, cb: multer.FileFilterCa
   // We check the actual mimetype, NOT the file extension (.jpg)
   if (file.mimetype === 'image/jpeg' || file.mimetype === 'image/png' || file.mimetype === 'image/webp') {
     cb(null, true); // VIP access granted
-  } else {9
+  } else {
     cb(new Error("Only jpeg, png, webp allowed")); // Kicked out
   }
 };

@@ -3,15 +3,17 @@ import express, { Request, Response, NextFunction } from 'express';
 import { connectDB } from './config/prisma';
 import { PrismaClient, Prisma } from '@prisma/client'; 
 
-// Make sure these paths are exactly correct!
 import userRoutes from './routes/users.routes';
 import listingRoutes from './routes/listings.routes';
 import bookingRoutes from './routes/bookings.routes';
 import authRoutes from './routes/auth.routes';
+import uploadRoutes from './routes/upload.routes';
 
 const app = express();
 app.use(express.json());
+
 app.use('/auth', authRoutes);
+app.use('/', uploadRoutes);
 app.use('/users', userRoutes);
 app.use('/listings', listingRoutes);
 app.use('/bookings', bookingRoutes);
@@ -23,6 +25,11 @@ app.use((err: any, req: Request, res: Response, next: NextFunction) => {
     if (err.code === 'P2002') return res.status(409).json({ error: 'Duplicate field value (email/username)' });
     if (err.code === 'P2025') return res.status(404).json({ error: 'Record not found' });
     if (err.code === 'P2003') return res.status(400).json({ error: 'Foreign key constraint failed' });
+  }
+
+  if (typeof err?.http_code === 'number') {
+    const msg = err?.error?.message || err?.message || 'Upload provider rejected the request';
+    return res.status(err.http_code).json({ error: msg });
   }
 
   res.status(500).json({ error: 'Something went wrong on the server' });
